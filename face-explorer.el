@@ -4,7 +4,7 @@
 
 ;; Author: Anders Lindgren
 ;; Keywords: faces
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; Created: 2017-02-24 (Based code from e2ansi created 2014-12-09)
 
 ;; This program is free software: you can redistribute it and/or modify
@@ -965,6 +965,44 @@ If last character contains a face property, return `point-max'."
       (next-char-property-change pos limit))))
 
 
+(defun face-explorer-overlays-at (pos)
+  "The overlays at POS.
+
+In newer Emacs versions, the list is sorted by decreasing priority."
+  (condition-case nil
+      (with-no-warnings
+        (overlays-at pos :sorted))
+    (error
+     ;; Note: `reverse' is needed to preserve the original order for
+     ;; otherwise equal overlays.  In addition, as it creates a new
+     ;; list, it is used to ensure that `sort' doesn't destructively
+     ;; modify the original list returned by `overlays-at'.
+     (let ((seq (reverse (overlays-at pos))))
+       (setq seq
+	     (sort seq (lambda (a b)
+			 (let ((a-prio (or (overlay-get a 'priority)
+					   0))
+			       (b-prio (or (overlay-get b 'priority)
+					   0)))
+			   ;; Priorities are typically numbers, but some
+			   ;; internal overlays use other, undocumented,
+			   ;; values.
+			   (if (not (equal a-prio b-prio))
+			       (and (numberp a-prio)
+				    (numberp b-prio)
+				    (< a-prio b-prio))
+			     (let ((a-start (overlay-start a))
+				   (b-start (overlay-start b)))
+			       (if (not (eq a-start b-start))
+				   (< a-start b-start)
+				 (let ((a-end (overlay-end a))
+				       (b-end (overlay-end b)))
+				   (if (not (eq a-end b-end))
+				       (> a-end b-end)
+				     nil)))))))))
+       seq))))
+
+
 (defun face-explorer-face-text-props-at (&optional pos)
   "The active face text properties at POS.
 
@@ -973,7 +1011,7 @@ well from overlays."
   (unless pos
     (setq pos (point)))
   (let ((res (get-text-property pos 'face)))
-    (dolist (overlay (overlays-at pos :sorted))
+    (dolist (overlay (face-explorer-overlays-at pos))
       (let ((overlay-text-prop (overlay-get overlay 'face)))
         (when overlay-text-prop
           (if res
@@ -1569,7 +1607,7 @@ Comparison is performed using `eq'."
 
 
 (defun face-explorer-type-list-all-known-types (spec)
-  "Non-nil if SPEC contains a construct like `(type x w32 ns)'."
+  "Non-nil if SPEC includes a construct like `(type x w32 ns)'."
   (let ((res nil))
     (dolist (entry spec)
       (let ((reqs (nth 0 entry)))
@@ -1722,8 +1760,7 @@ When omitted, `point-min' and `point-max' are used, respectively."
 
 
 (defun face-explorer-insert-with-primitive-attributes
-    (source-buffer &optional from to use-fictitious-display
-                   extra-attrs)
+    (source-buffer &optional from to use-fictitious-display)
   "Insert content of SOURCE-BUFFER but with primitive attributes.
 
 The part between FROM and TO is inserted.  When omitted, TO and
@@ -1733,9 +1770,7 @@ respectively.
 When USE-FICTITIOUS-DISPLAY is non-nil, face information for a
 fictitious display is used.  See
 `face-explorer-match-display-requirements' how to define a
-fictitious display.
-
-EXTRA-ATTRS can be used to specify additional face attributes."
+fictitious display."
   (with-current-buffer source-buffer
     (unless from
       (setq from (point-min)))
@@ -1752,12 +1787,10 @@ EXTRA-ATTRS can be used to specify additional face attributes."
                          to))
            (plist
             (with-current-buffer source-buffer
-              (face-explorer-join-face-attributes
-               (if use-fictitious-display
-                   (face-explorer-face-attributes-for-fictitious-display-at
-                    from)
-                 (face-explorer-face-attributes-at from))
-               extra-attrs)))
+              (if use-fictitious-display
+                  (face-explorer-face-attributes-for-fictitious-display-at
+                   from)
+                (face-explorer-face-attributes-at from))))
            (str (with-current-buffer source-buffer
                   (buffer-substring-no-properties
                    from
@@ -1769,7 +1802,7 @@ EXTRA-ATTRS can be used to specify additional face attributes."
 
 
 (defun face-explorer-render-with-primitive-attributes
-    (&optional from to use-fictitious-display extra-attrs)
+    (&optional from to use-fictitious-display)
   "Return string that look like OBJECT but with primitive attributes.
 
 The part between FROM and TO is converted.  When omitted, TO and
@@ -1779,13 +1812,11 @@ respectively.
 When USE-FICTITIOUS-DISPLAY is non-nil, face information for a
 fictitious display is used.  See
 `face-explorer-match-display-requirements' how to define a
-fictitious display.
-
-EXTRA-ATTRS can be used to specify additional face attributes."
+fictitious display."
   (let ((source-buffer (current-buffer)))
     (with-temp-buffer
       (face-explorer-insert-with-primitive-attributes
-       source-buffer from to use-fictitious-display extra-attrs)
+       source-buffer from to use-fictitious-display)
       (buffer-string))))
 
 
@@ -1832,12 +1863,13 @@ Both text properties and overlays are copied."
     `(let ((,starts '())
            (,line (count-lines (point-min) (line-beginning-position))))
        ;; Record window starts.
-       (dolist (window (window-list-1 nil nil t))
-         (when (eq (current-buffer) (window-buffer window))
-           (push (list window
-                       (count-lines (point-min)
-                                    (window-start window)))
-                 ,starts)))
+       (dolist (frame (frame-list))
+         (dolist (window (window-list frame :ignore-minibuffer))
+           (when (eq (current-buffer) (window-buffer window))
+             (push (list window
+                         (count-lines (point-min)
+                                      (window-start window)))
+                   ,starts))))
        (prog1
            (progn ,@body)
          ;; Restore window starts.
@@ -2389,8 +2421,25 @@ display."
 (make-variable-buffer-local 'face-explorer-tooltip-mode-overlay)
 
 
+(defvar face-explorer-tooltip-properties
+  '(not fontified)
+  "The properties Face-Explorer-Tooltip mode should display.
+
+The variable should be a list of symbols to display.  If the
+first symbol is `not', then display all symbols except those in
+the rest of the list.  To display all properties, set it
+to `(not)'.
+
+Properties aliases, defined in `char-property-alias-alist', are
+also displayed (or excluded, if the list starts with `not').")
+
+
+(defvar face-explorer-tooltip-exclude-self t
+  "When non-nil, exclude properties used by the mode itself.")
+
+
 (defun face-explorer-tooltip-kill-overlay ()
-  "Remove the `face-explorer-tooltip-mode' overlay.
+  "Remove the Face-Explorer-Tooltip mode overlay.
 
 This is typically attached to `change-major-mode-hook' to ensure
 that changing the major mode doesn't leave stray overlays."
@@ -2459,23 +2508,6 @@ to non-header lines."
     res))
 
 
-(defvar face-explorer-tooltip-properties
-  '(not fontified)
-  "The properties Face-Explorer-Tooltip mode should display.
-
-The variable should be a list of symbols to display.  If the
-first symbol is `not', then display all symbols except those in
-the rest of the list.  To display all properties, set it
-to `(not)'.
-
-Properties aliases, defined in `char-property-alias-alist', are
-also displayed (or excluded, if the list starts with `not').")
-
-
-(defvar face-explorer-tooltip-exclude-self t
-  "When non-nil, exclude properties used by the mode itself.")
-
-
 (defun face-explorer-tooltip-format (window object pos)
   "Create a help text for the `face' property at the point.
 
@@ -2504,7 +2536,7 @@ buffer or overlay.  POS is the position of the mouse pointer."
       (let* ((plist (text-properties-at pos object))
              (res (face-explorer-tooltip-format-plist properties plist)))
       (when (bufferp object)
-        (dolist (overlay (overlays-at pos t))
+        (dolist (overlay (face-explorer-overlays-at pos))
           (setq res (append (face-explorer-tooltip-format-plist
                              properties
                              (overlay-properties overlay)
@@ -2783,8 +2815,19 @@ function, c.f. `revert-buffer-function'."
 ;;;###autoload
 (defun face-explorer-describe-face (face)
   "Print information about FACE, including the origin of all attributes."
-  (interactive (list (read-face-name "Describe face definitions"
-                                     (or (face-at-point t) 'default))))
+  (interactive (list (read-face-name
+                      "Describe face definitions"
+                      (or
+                       ;; The face used in a buffer.
+                       (face-at-point)
+                       ;; The name of a face in a buffer.
+                       (let ((symbol-name (thing-at-point 'symbol)))
+                         (and symbol-name
+                              (let ((symbol (intern-soft symbol-name)))
+                                (and (facep symbol)
+                                     symbol))))
+                       ;; Default to `default'.
+                       'default))))
   (with-current-buffer (get-buffer-create "*FaceExplorerDefinition*")
     (face-explorer-describe-face-mode)
     (face-explorer-set-state face)
@@ -3935,38 +3978,6 @@ function, c.f. `revert-buffer-function'."
 This is used to make the output more readable.")
 
 
-(defun face-explorer-add-overlays (name str &rest overlay-descr-list)
-  "Insert table entry named NAME with content STR and add OVERLAY-DESCR-LIST.
-
-Each argument after STR, found in OVERLAY-DESCR-LIST, should be a
-list where each element represent one overlay.  Each argument
-should be on the form (START END PROP VALUE [PROP VALUE] ...),
-where PROP is a property and VALUE the value.  START and END the
-positions within the string, scaled by
-`face-explorer-add-overlays-scale'."
-  (insert (format "%-15s  " name))
-  (let ((p (point)))
-    (insert str)
-    (let ((p2 (point)))
-      (dolist (arg overlay-descr-list)
-        (let ((start (pop arg))
-              (end (pop arg)))
-          (let ((overlay (make-overlay
-                          (+ p (* face-explorer-add-overlays-scale start))
-                          (+ p (* face-explorer-add-overlays-scale end)))))
-            (while arg
-              (let ((prop (pop arg))
-                    (value (pop arg)))
-                (overlay-put overlay prop value))))))
-      (insert "  ")
-      (face-explorer-insert-with-primitive-attributes
-       (current-buffer) p p2 nil)
-      (insert "  ")
-      (face-explorer-insert-with-primitive-attributes
-       (current-buffer) p p2 t (face-explorer-context-colors))))
-  (insert "\n"))
-
-
 (defvar face-explorer-list-overlay-examples--table '()
   "Current table used by `face-explorer-list-overlay-examples'.")
 
@@ -4040,8 +4051,7 @@ The table entry is inserted at the beginning of
                 face-explorer-list-overlay-examples--overlays-start
                 (+ face-explorer-list-overlay-examples--overlays-start
                    ,(length str))
-                nil
-                (list (selected-frame))))
+                nil))
               (fictitious
                (face-explorer-render-with-primitive-attributes
                 face-explorer-list-overlay-examples--overlays-start
@@ -4119,6 +4129,16 @@ attributes that should match the current fictitious display.\n")
         (face-explorer-add-overlays "nested-same2"
                                     "AAABBBCCC"
                                     '(1 2 face (:foreground "blue"))
+                                    '(0 3 face (:foreground "red")))
+
+        (face-explorer-add-overlays "same-start"
+                                    "AAABBBCCC"
+                                    '(0 2 face (:foreground "blue"))
+                                    '(0 3 face (:foreground "red")))
+
+        (face-explorer-add-overlays "same-end"
+                                    "AAABBBCCC"
+                                    '(1 3 face (:foreground "blue"))
                                     '(0 3 face (:foreground "red")))
         ;; --------------------
         ;; Overlapping, but not nested.

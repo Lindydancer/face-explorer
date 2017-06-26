@@ -1,7 +1,7 @@
 # face-explorer - Library and tools for faces and text properties
 
 *Author:* Anders Lindgren<br>
-*Version:* 0.0.1<br>
+*Version:* 0.0.2<br>
 
 Library and tools for faces and text properties.
 
