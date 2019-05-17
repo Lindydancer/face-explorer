@@ -67,6 +67,7 @@
      ((,req (:foreground "green") (:background "red"))))))
 
 (provide-theme 'face-explorer-test-theme)
+(enable-theme 'face-explorer-test-theme)
 
 (ert-deftest face-explorer-test-theme ()
   "Test theme face definitions."
@@ -118,6 +119,7 @@
  '(face-explorer-test-theme-face2 ((t :underline t))))
 
 (provide-theme 'face-explorer-test-theme1)
+(enable-theme 'face-explorer-test-theme1)
 
 
 (deftheme face-explorer-test-theme2 "")
@@ -128,6 +130,7 @@
  '(face-explorer-test-theme-face2 ((t :underline nil))))
 
 (provide-theme 'face-explorer-test-theme2)
+(enable-theme 'face-explorer-test-theme2)
 
 (deftheme face-explorer-test-theme3 "")
 
@@ -137,6 +140,7 @@
                                       :underline t))))
 
 (provide-theme 'face-explorer-test-theme3)
+(enable-theme 'face-explorer-test-theme3)
 
 
 ;; --------------------
@@ -150,6 +154,7 @@
  '(default ((((background dark)) :underline t))))
 
 (provide-theme 'face-explorer-test-theme4)
+(enable-theme 'face-explorer-test-theme4)
 
 
 ;; --------------------
@@ -166,6 +171,7 @@
              :foreground "maroon3" :background "light green"))))
 
 (provide-theme 'face-explorer-test-theme5)
+(enable-theme 'face-explorer-test-theme5)
 
 
 (ert-deftest face-explorer-test-multiple-theme ()
