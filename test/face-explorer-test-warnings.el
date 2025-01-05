@@ -1,4 +1,4 @@
-;;; face-explorer-test-basic.el --- Test warning system of `face-explorer'.
+;;; face-explorer-test-basic.el --- Test warnings in `face-explorer'.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2017 Anders Lindgren
 

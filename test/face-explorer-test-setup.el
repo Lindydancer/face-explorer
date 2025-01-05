@@ -1,4 +1,4 @@
-;;; face-explorer-test-setup.el --- Setup and execute all tests.
+;;; face-explorer-test-setup.el --- Setup and execute all tests.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2017 Anders Lindgren
 

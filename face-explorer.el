@@ -1,10 +1,10 @@
-;;; face-explorer.el --- Library and tools for faces and text properties
+;;; face-explorer.el --- Tools for faces and text properties.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2014-2017  Anders Lindgren
 
 ;; Author: Anders Lindgren
 ;; Keywords: faces
-;; Version: 0.0.4
+;; Version: 0.0.5
 ;; Created: 2017-02-24 (Based code from e2ansi created 2014-12-09)
 ;; URL: https://github.com/Lindydancer/face-explorer
 
@@ -2336,7 +2336,8 @@ If PLIST contains the color specification, it is retained."
     (:stipple            . "Stipple")
     (:font               . "Font")
     (:fontset            . "Fontset")
-    (:inherit            . "Inherit"))
+    (:inherit            . "Inherit")
+    (:extend             . "Extend"))
   "Alist from face attribute to human-readable name.")
 
 
@@ -2467,9 +2468,6 @@ that changing the major mode doesn't leave stray overlays."
 ;;;###autoload
 (define-minor-mode face-explorer-tooltip-mode
   "Minor mode to show tooltips for face-related text properties."
-  nil
-  nil
-  nil
   :group 'face-explorer
   (if (not face-explorer-tooltip-mode)
       (face-explorer-tooltip-kill-overlay)
@@ -3539,13 +3537,13 @@ function, c.f. `revert-buffer-function'."
     ;; as faces, and members after aren't.
 
     ("mix2b"
-     ((face-explorer-example-underlined
+     ((face-explorer-example-underline
        :background "red"
        face-explorer-example-green-foreground))
      (:underline t :background "red"))
 
     ("mix3b"
-     ((face-explorer-example-underlined
+     ((face-explorer-example-underline
        :background "red"
        face-explorer-example-blue-foreground
        face-explorer-example-green-foreground))
@@ -3618,19 +3616,19 @@ function, c.f. `revert-buffer-function'."
 
     ;; Different face properties.
     ("inh-underlined2"
-     (:inherit face-explorer-example-underlined :foreground "blue")
+     (:inherit face-explorer-example-underline :foreground "blue")
      (:foreground "blue" :underline t))
 
     ("inh-underlined3"
-     (:foreground "blue" :inherit face-explorer-example-underlined)
+     (:foreground "blue" :inherit face-explorer-example-underline)
      (:underline t :foreground "blue"))
 
     ("inh-underlined4"
-     ((:inherit face-explorer-example-underlined) (:foreground "blue"))
+     ((:inherit face-explorer-example-underline) (:foreground "blue"))
      (:foreground "blue" :underline t))
 
     ("inh-underlined5"
-     ((:foreground "blue") (:inherit face-explorer-example-underlined))
+     ((:foreground "blue") (:inherit face-explorer-example-underline))
      (:underline t :foreground "blue"))
 
     ;; --------------------
@@ -3668,7 +3666,7 @@ function, c.f. `revert-buffer-function'."
     ;;
     ("inh-3mult1"
      ((:inherit face-explorer-example-red-foreground)
-      face-explorer-example-underlined
+      face-explorer-example-underline
       :inherit face-explorer-example-blue-background)
      (:background "blue" :underline t :foreground "red"))
 
@@ -3801,6 +3799,101 @@ function, c.f. `revert-buffer-function'."
      "face-explorer-example-aliased-face2"
      (:foreground "red"))
 
+    ;; --------------------
+    ;; Covered with normal/nil.
+    ;;
+
+    ;; ----------
+    ;; "normal" resets.
+    ("weight-bold"
+     (face-explorer-example-weight-bold)
+     (:weight bold))
+
+    ("weight-normal"
+     (face-explorer-example-weight-normal
+      face-explorer-example-weight-bold)
+     ())
+
+    ("slant-italic"
+     (face-explorer-example-slant-italic)
+     (:slant italic))
+
+    ("slant-normal"
+     (face-explorer-example-slant-normal
+      face-explorer-example-slant-italic)
+     ())
+
+    ;; ----------
+    ;; "nil" resets.
+    ("overline"
+     (face-explorer-example-overline)
+     (:overline t))
+
+    ("overline-nil"
+     (face-explorer-example-overline-nil
+      face-explorer-example-overline)
+     ())
+
+    ("underline"
+     (face-explorer-example-underline)
+     (:underline t))
+
+    ("underline-nil"
+     (face-explorer-example-underline-nil
+      face-explorer-example-underline)
+     ())
+
+    ("box"
+     (face-explorer-example-box)
+     (:box 1))
+
+    ("box-nil"
+     (face-explorer-example-box-nil
+      face-explorer-example-box)
+     ())
+
+    ("strike-through"
+     (face-explorer-example-strike-through)
+     (:strike-through t))
+
+    ("strike-through-nil"
+     (face-explorer-example-strike-through-nil
+      face-explorer-example-strike-through)
+     ())
+
+    ("inverse-video"
+     (face-explorer-example-inverse-video)
+     (:inverse-video t))
+
+    ("inverse-video-nil"
+     (face-explorer-example-inverse-video-nil
+      face-explorer-example-inverse-video)
+     ())
+
+    ;; ----------
+    ;; "nil" DOES NOT reset!
+    ("foreground"
+     (face-explorer-example-red-foreground)
+     (:foreground "red"))
+
+    ;; Having "nil" as background or foreground is not
+    ;; legal. Unfortunately, face-explorer doesn't handle it as Emacs
+    ;; does. TODO: Fix this.
+
+    ;; ("foreground-nil"
+    ;;  (face-explorer-example-foreground-nil
+    ;;   face-explorer-example-red-foreground)
+    ;;  (:foreground "red"))
+
+    ("background"
+     (face-explorer-example-blue-background)
+     (:background "blue"))
+
+    ;; ("background-nil"
+    ;;  (face-explorer-example-background-nil
+    ;;   face-explorer-example-blue-background)
+    ;;  (:background "blue")
+
     )
   "List of example of `face' text properties.
 
@@ -3835,11 +3928,6 @@ This is remapped by `face-explorer-list-face-prop-examples' to
          :inherit face-explorer-example-red-foreground-remapped))
     "Face inheriting from remapped face.")
 
-  ;; --------------------
-  (defface face-explorer-example-underlined
-    '((t :underline t))
-    "Underlined face to test face-explorer.")
-
   (defface face-explorer-example-red-blue
     '((t :foreground "red" :background "blue"))
     "Test face with both background and foreground.")
@@ -3859,6 +3947,93 @@ This is remapped by `face-explorer-list-face-prop-examples' to
   (defface face-explorer-example-distant-foreground
     '((t :foreground "blue" :distant-foreground "red"))
     "Face that with a distant foreground.")
+
+  ;; --------------------
+  ;;
+
+  (defface face-explorer-example-weight-bold
+    '((t :weight bold))
+    "Face with bold weight.")
+
+  (defface face-explorer-example-slant-italic
+    '((t :slant italic))
+    "Face with italic slant.")
+
+  (defface face-explorer-example-overline
+    '((t :overline t))
+    "Overlined face to test face-explorer.")
+
+  (defface face-explorer-example-underline
+    '((t :underline t))
+    "Underlined face to test face-explorer.")
+
+  (defface face-explorer-example-strike-through
+    '((t :strike-through t))
+    "Striked through face to test face-explorer.")
+
+  (defface face-explorer-example-box
+    '((t :box 1))
+    "Boxed face to test face-explorer.")
+
+  (defface face-explorer-example-inverse-video
+    '((t :inverse-video t))
+    "Inversed face to test face-explorer.")
+
+;;  (defface face-explorer-example-stipple
+;;  '((t :stipple t))
+;;  "Stippled face to test face-explorer.")
+
+
+  ;; --------------------
+  ;; Font using nil values.
+  ;;
+  ;; For some values, this take effect (e.g. :underline), for others
+  ;; it's ignored (e.g. :background).
+
+  (defface face-explorer-example-weight-normal
+    '((t :weight normal))
+    "Face with nil weight.")
+
+  (defface face-explorer-example-slant-normal
+    '((t :slant normal))
+    "Face with nil slant.")
+
+  (defface face-explorer-example-foreground-nil
+    '((t :foreground nil))
+    "Face with nil foreground.")
+
+  (defface face-explorer-example-background-nil
+    '((t :background nil))
+    "Face with nil background.")
+
+  (defface face-explorer-example-overline-nil
+    '((t :overline nil))
+    "Face with nil overline.")
+
+  (defface face-explorer-example-underline-nil
+    '((t :underline nil))
+    "Face with nil underline.")
+
+  (defface face-explorer-example-strike-through-nil
+    '((t :strike-through nil))
+    "Face with nil strike-through.")
+
+  (defface face-explorer-example-box-nil
+    '((t :box nil))
+    "Face with nil box.")
+
+  (defface face-explorer-example-inverse-video-nil
+    '((t :inverse-video nil))
+    "Face with nil inverse-video.")
+
+;;  (defface face-explorer-example-stipple-nil
+;;  '((t :stipple nil))
+;;  "Face with nil stipple.")
+
+
+  ;; --------------------
+  ;; Obsolete face alias.
+  ;;
 
   (define-obsolete-face-alias
     'face-explorer-example-aliased-face1
@@ -4413,9 +4588,7 @@ function, c.f. `revert-buffer-function'."
 
 The following keys are used:
 \\{face-explorer-simulate-display-mode-map}"
-  nil
-  nil
-  face-explorer-simulate-display-mode-map
+  :keymap face-explorer-simulate-display-mode-map
   :group 'face-explorer
   (if face-explorer-simulate-display-mode
       (progn

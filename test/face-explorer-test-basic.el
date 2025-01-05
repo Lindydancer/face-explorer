@@ -1,4 +1,4 @@
-;;; face-explorer-test-basic.el --- Basic tests for `face-explorer'.
+;;; face-explorer-test-basic.el --- Basic tests for `face-explorer'.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2017 Anders Lindgren
 

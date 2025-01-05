@@ -1,4 +1,4 @@
-;;; face-explorer-test-theme.el --- test for face-explorer
+;;; face-explorer-test-theme.el --- test for face-explorer.  -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2017  Anders Lindgren
 
