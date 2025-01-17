@@ -1,10 +1,10 @@
 ;;; face-explorer.el --- Tools for faces and text properties.  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014-2017  Anders Lindgren
+;; Copyright (C) 2014-2017,2019,2024-2025 Anders Lindgren
 
 ;; Author: Anders Lindgren
 ;; Keywords: faces
-;; Version: 0.0.5
+;; Version: 0.0.6
 ;; Created: 2017-02-24 (Based code from e2ansi created 2014-12-09)
 ;; URL: https://github.com/Lindydancer/face-explorer
 
@@ -619,30 +619,24 @@ the same as the original PLIST."
   "Convert deprecated face attributes in PLIST to modern variants."
   (if (null plist)
       plist
-    (let ((orig plist)
-          (key (pop plist))
-          (value (pop plist))
-          (new-plist (face-explorer-fix-face-attributes plist)))
-      (cond ((eq key :italic)
-             (push (if value 'italic 'normal) new-plist)
-             (push :slant new-plist))
-            ((eq key :bold)
-             (push (if value 'bold 'normal) new-plist)
-             (push :weight new-plist))
-            ((eq key :reverse-video)
-             (push value new-plist)
-             (push :inverse-video new-plist))
-            ((and (eq key :box)
-                  (eq value t))
-             (push 1 new-plist)
-             (push :box new-plist))
-            ((eq plist new-plist)
-             ;; Use original plist, to minimize consing.
-             (setq new-plist orig))
-            (t
-             (push value new-plist)
-             (push key new-plist)))
-      new-plist)))
+    (let ((rest (cdr (cdr plist))))
+      (let ((new-rest (face-explorer-fix-face-attributes rest))
+            (key   (nth 0 plist))
+            (value (nth 1 plist)))
+        (cond ((eq key :italic)
+               `(:slant ,(if value 'italic 'normal) ,@new-rest))
+              ((eq key :bold)
+               `(:weight ,(if value 'bold 'normal) ,@new-rest))
+              ((eq key :reverse-video)
+               `(:inverse-video ,value ,@new-rest))
+              ((and (eq key :box)
+                    (eq value t))
+               `(:box 1 ,@new-rest))
+              ((eq rest new-rest)
+               ;; No change. Use original plist to avoid consing.
+               plist)
+              (t
+               `(,key ,value ,@new-rest)))))))
 
 
 (defun face-explorer-face-attributes-for-future-frames (face)
@@ -690,20 +684,18 @@ Entries towards the end of the the list take precedence."
   "Delete KEY from property list PLIST, nondestructively.
 
 Return a new property list."
-  (let ((res '()))
-    (if (null plist)
-        plist
-      (if (eq (car plist) key)
-          (face-explorer-plist-delete key (cdr (cdr plist)))
-        (let ((orig plist)
-              (this-key (pop plist))
-              (this-value (pop plist))
-              (new-plist (face-explorer-plist-delete key plist)))
-          (if (eq plist new-plist)
-              orig
-            (push this-value new-plist)
-            (push this-key new-plist)
-            new-plist))))))
+  (if (null plist)
+      plist
+    (let ((head-key   (nth 0 plist))
+          (head-value (nth 1 plist))
+          (rest       (cdr (cdr plist))))
+      (if (eq head-key key)
+          (face-explorer-plist-delete key rest)
+        (let ((new-rest (face-explorer-plist-delete key rest)))
+          (if (eq rest new-rest)
+              ;; No change. Use original plist to avoid consing.
+              plist
+            `(,head-key ,head-value ,@new-rest)))))))
 
 
 (defun face-explorer-prop-valid-value (attr value)
@@ -2522,7 +2514,7 @@ to non-header lines."
     res))
 
 
-(defun face-explorer-tooltip-format (window object pos)
+(defun face-explorer-tooltip-format (_window object pos)
   "Create a help text for the `face' property at the point.
 
 WINDOW is the window in which the tooltip should be shown in.
@@ -2791,7 +2783,7 @@ List of all faces, with samples in current and fictitious displays.\n\n")
         (face-explorer-insert-table (nreverse lines))))))
 
 
-(defun face-explorer-list-faces-revert-buffer (ignore-auto noconfirm)
+(defun face-explorer-list-faces-revert-buffer (_ignore-auto _noconfirm)
   "Update content of the `face-explorer-list-faces' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -2910,11 +2902,7 @@ INDENTATION, when specified, is a string inserted before each line."
     (let ((buffer-read-only nil)
           (face face-explorer-common-state-mode--state))
       (erase-buffer)
-      (let* ((attributes (mapcar #'car custom-face-attributes))
-             (max-length
-              (apply #'max (mapcar
-                            (lambda (attr) (length (symbol-name attr)))
-                            attributes))))
+      (let ((attributes (mapcar #'car custom-face-attributes)))
         (insert "Face: " (symbol-name face) "\n\n")
         (insert "Native sample: ")
         (insert (propertize face-explorer-sample-text 'face face))
@@ -2989,7 +2977,7 @@ INDENTATION, when specified, is a string inserted before each line."
             (insert "\n")))))))
 
 
-(defun face-explorer-describe-face-revert-buffer (ignore-auto noconfirm)
+(defun face-explorer-describe-face-revert-buffer (_ignore-auto _noconfirm)
   "Update content of the `face-explorer-describe-face' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -3064,8 +3052,8 @@ text property at the point."
       (face-explorer-insert-typical-displays face-text-property))))
 
 
-(defun face-explorer-describe-face-prop-revert-buffer (ignore-auto
-                                                       noconfirm)
+(defun face-explorer-describe-face-prop-revert-buffer (_ignore-auto
+                                                       _noconfirm)
   "Update content of the `face-explorer-describe-face-prop' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -3151,10 +3139,11 @@ function, c.f. `revert-buffer-function'."
   (put face 'face-override-spec nil)
   (put face 'theme-face nil)
   (put face 'face-defface-spec nil)
-  (let ((pair (assq face face-new-frame-defaults)))
-    (when pair
-      (setq face-new-frame-defaults
-            (delq pair face-new-frame-defaults)))))
+  (when (boundp 'face-new-frame-defaults)
+    (let ((pair (assq face face-new-frame-defaults)))
+      (when pair
+        (setq face-new-frame-defaults
+              (delq pair face-new-frame-defaults))))))
 
 
 (defun face-explorer-pad-string (string width)
@@ -3267,8 +3256,8 @@ buffer will look differently than it does in a graphical frame.\n\n")
         (face-explorer-insert-table (nreverse lines))))))
 
 
-(defun face-explorer-list-display-features-revert-buffer (ignore-auto
-                                                          noconfirm)
+(defun face-explorer-list-display-features-revert-buffer (_ignore-auto
+                                                          _noconfirm)
   "Update content of the `face-explorer-list-display-features' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -4119,8 +4108,8 @@ containing the entry."
         (face-explorer-insert-table (nreverse lines))))))
 
 
-(defun face-explorer-list-face-prop-examples-revert-buffer (ignore-auto
-                                                            noconfirm)
+(defun face-explorer-list-face-prop-examples-revert-buffer (_ignore-auto
+                                                            _noconfirm)
   "Update content of the `face-explorer-list-face-prop-examples' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -4551,7 +4540,7 @@ the same.\n\n")
 
 
 (defun face-explorer-list-overlay-examples-revert-buffer
-    (ignore-auto noconfirm)
+    (_ignore-auto _noconfirm)
   "Update content of the `face-explorer-list-overlay-examples' buffer.
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
@@ -4599,12 +4588,19 @@ The following keys are used:
     (kill-local-variable 'face-explorer-update-buffer-function)))
 
 
+;; Note: This used to be a `lambda' in
+;; `face-explorer-simulate-display-global-mode'. Unfortunately, this
+;; triggered a byte compilation warning for a malformed single quote.
+(defun face-explorer-maybe-enable-simulate-display-mode ()
+  "Enable Face-Explorer-Simulate-Display mode, except in some buffers."
+  (unless (derived-mode-p 'face-explorer-common-mode)
+    (face-explorer-simulate-display-mode 1)))
+
+
 ;;;###autoload
 (define-global-minor-mode face-explorer-simulate-display-global-mode
   face-explorer-simulate-display-mode
-  (lambda ()
-    (unless (derived-mode-p 'face-explorer-common-mode)
-      (face-explorer-simulate-display-mode 1)))
+  face-explorer-maybe-enable-simulate-display-mode
   :group 'face-explorer)
 
 
