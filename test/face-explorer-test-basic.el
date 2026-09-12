@@ -149,6 +149,109 @@
 
 
 ;; ------------------------------------------------------------
+;; Next face property change
+;;
+
+(defun face-explorer-test-collect-face-property-changes
+    (str pos &optional ov-b ov-e)
+  "Collect results from `face-explorer-next-face-property-change'.
+
+Insert STR into a temporary buffer.
+
+If OV-B and OV-E are non-nil, add a face overlay stretching from OV-B to
+OV-E. If the OV-E is negative, count from the end of the buffer.
+
+Call the function repeatedly, starting with POS, until it returns nil."
+  (let ((res '()))
+    (with-temp-buffer
+      (insert str)
+      (when ov-b
+        (let ((overlay (make-overlay ov-b
+                                     (if (< ov-e 0)
+                                         (+ (point-max) ov-e)
+                                       ov-e)
+                                     (current-buffer))))
+          (overlay-put overlay 'face 'test-face)))
+      (while (setq pos (face-explorer-next-face-property-change pos))
+        (push pos res)))
+    (nreverse res)))
+
+(ert-deftest face-explorer-test-next-face-property-change ()
+  "Test `face-explorer-next-face-property-change'."
+  ;; Empty.
+  (should (equal
+           (face-explorer-test-collect-face-property-changes "" 1)
+           '()))
+  (should (equal
+           (face-explorer-test-collect-face-property-changes "" nil)
+           '()))
+
+  ;; No `face' attributes.
+  (should (equal
+           (face-explorer-test-collect-face-property-changes "xyz" 1)
+           '(4)))
+  (should (equal
+           (face-explorer-test-collect-face-property-changes "xyz" nil)
+           '(4)))
+
+  ;; One `face' attribute spanning whole text.
+  (let ((str (propertize "abc" 'face 'bold)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str 1)
+             '(4)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str nil)
+             '(1 4))))
+
+  ;; Two `face' attributes, spanning whole text.
+  (let ((str (concat (propertize "abc" 'face 'bold)
+                     (propertize "def" 'face 'italic))))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str 1)
+             '(4 7)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str nil)
+             '(1 4 7))))
+
+  ;; One `face' attribute, in the middle of the text.
+  (let ((str (concat "abc"
+                     (propertize "def" 'face 'italic)
+                     "ghi")))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str 1)
+             '(4 7 10)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str nil)
+             '(4 7 10))))
+
+  ;; --------------------
+  ;; Mix with overlays
+
+  ;; Overlays start end and text without a face.
+  (let ((str (concat "abc"
+                     (propertize "def" 'face 'italic)
+                     "ghi")))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str 1 2 -2)
+             '(2 8 10)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str nil 2 -2)
+             '(2 8 10))))
+
+
+  ;; Overlays start end and text with a face.
+  (let ((str (concat (propertize "abcdefghi" 'face 'italic))))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str 1 2 -2)
+             '(2 8 10)))
+    (should (equal
+             (face-explorer-test-collect-face-property-changes str nil 2 -2)
+             '(1 2 8 10))))
+
+  nil)
+
+
+;; ------------------------------------------------------------
 ;; Table generator.
 ;;
 

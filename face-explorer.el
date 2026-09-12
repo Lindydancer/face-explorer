@@ -1,12 +1,13 @@
-;;; face-explorer.el --- Tools for faces and text properties.  -*- lexical-binding: t; -*-
+;;; face-explorer.el --- Tools for faces and text properties  -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2014-2017,2019,2024-2025 Anders Lindgren
+;; Copyright (C) 2014-2017,2019,2024-2026 Anders Lindgren
 
 ;; Author: Anders Lindgren
 ;; Keywords: faces
-;; Version: 0.0.6
+;; Version: 0.0.7
 ;; Created: 2017-02-24 (Based code from e2ansi created 2014-12-09)
 ;; URL: https://github.com/Lindydancer/face-explorer
+;; Package-Requires: ((emacs "24.1"))
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -23,98 +24,112 @@
 
 ;;; Commentary:
 
-;; Library and tools for faces and text properties.
+;; `face-explorer' is a library and a collection of tools related to
+;; text attributes and colors -- knows as "faces" in the Emacs
+;; vocabulary.
 ;;
-;; This library is useful for packages that convert syntax highlighted
-;; buffers to other formats.  The functions can be used to determine
-;; how a face or a face text property looks, in terms of primitive
-;; face attributes (e.g. foreground and background colors).  Two sets
-;; of functions are provided, one for existing frames and one for
-;; fictitious displays, like 8 color tty.
+;; As a library it is useful, for example, for packages that convert
+;; syntax highlighted buffers to other formats.  (One such package is
+;; `e2ansi' that can render syntax highlighted text using ANSI escape
+;; sequences so that it can be displayed in a terminal.)
 ;;
-;; In addition, the following tools are provided:
+;; The tools allows you to investigate faces in more depth than the
+;; corresponding built-in commands, e.g. `face-explorer-describe-face'
+;; shows the underlying face and theme definitions.
 ;;
-;; - `face-explorer-list-faces' -- list all available faces.  Like
-;;   `list-faces-display' but with information on how a face is
-;;   defined.  In addition, a sample for the selected frame and for a
-;;   fictitious display is shown.
-;;
-;; - `face-explorer-describe-face' -- Print detailed information on
-;;   how a face is defined, and list all underlying definitions.
-;;
-;; - `face-explorer-describe-face-prop' -- Describe the `face' text
-;;   property at the point in terms of primitive face attributes.
-;;   Also show how it would look on a fictitious display.
-;;
-;; - `face-explorer-list-display-features' -- Show which features a
-;;   display supports.  Most graphical displays support all, or most,
-;;   features.  However, many tty:s don't support, for example,
-;;   strike-through.  Using specially constructed faces, the resulting
-;;   buffer will render differently in different displays, e.g. a
-;;   graphical frame and a tty connected using `emacsclient -nw'.
-;;
-;; - `face-explorer-list-face-prop-examples' -- Show a buffer with an
-;;   assortment of `face' text properties.  A sample text is shown in
-;;   four variants: Native, a manually maintained reference vector,
-;;   the result of `face-explorer-face-prop-attributes' and
-;;   `face-explorer-face-prop-attributes-for-fictitious-display'.  Any
-;;   package that convert a buffer to another format (like HTML, ANSI,
-;;   or LaTeX) could use this buffer to ensure that everything work as
-;;   intended.
-;;
-;; - `face-explorer-list-overlay-examples' -- Show a buffer with a
-;;   number of examples of overlays, some are mixed with `face' text
-;;   properties.  Any package that convert a buffer to another format
-;;   (like HTML, ANSI, or LaTeX) could use this buffer to ensure that
-;;   everything work as intended.
-;;
-;; - `face-explorer-tooltip-mode' -- Minor mode that shows tooltips
-;;   containing text properties and overlays at the mouse pointer.
-;;
-;; - `face-explorer-simulate-display-mode' -- Minor mode for make a
-;;   buffer look like it would on a fictitious display.  Using this
-;;   you can, for example, see how a theme would look in using dark or
-;;   light background, a 8 color tty, or on a grayscale graphical
-;;   monitor.
+;; In addition, there are tools for creating buffers with weird
+;; combination of faces, intended for stress-testing packages that
+;; process face information.
 
-;; Fictitious displays:
+;; Features:
 ;;
-;; Emacs supports a variety of displays, from graphical frames to
-;; terminals with 8 colors.  Emacs itself provides query functions for
-;; existing displays.  This library provides query functions for any
-;; kind of display, allowing you to play the "what if" game.  (For
-;; example, how would a face look on a grayscale graphical display or
-;; an 8 color tty.)
+;; - Support for batch mode -- When in batch mode, Emacs natively
+;;   doesn't support faces.  This package can determine how a specific
+;;   face would have looked in the normal Emacs user interface by
+;;   inspecting the low-level face definitions.
 ;;
-;; It is possible to use the query functions for fictitious displays
-;; in batch mode, when the normal face and colors system are severely
-;; restricted.
+;; - Fictitious displays -- It's possible to retrieve information how
+;;   a face would look in any kind of display, not only the current.
+;;   For example, you can determine how a face would look in an
+;;   terminal that only supports eight colors.
+;;
+;; - All sources are taken into account -- When determining the
+;;   attributes of a face, all face sources are taken into account.
+;;   This includes the underlying face definition, active themes, face
+;;   overrides, and remappings performed by `face-remapping-alist'.
+
+;; Tools:
+;;
+;; A number of tools useful when developing and testing packages that
+;; handle faces.  For example:
+;;
+;; - Display information about faces which are more detailed than the
+;;   built-in system.  For example, the full face specification and
+;;   relevant theme definitions are displayed.
+;;
+;; - A *face verifier* that can determine common problems related to
+;;   face definitions.
+;;
+;; - Display test buffers that use faces in complicated ways.  This is
+;;   useful when testing packages that retreive face information.
 
 ;; Library functions:
 ;;
-;; Function for existing frames:
+;; Vocabulary:
 ;;
-;; - `face-explorer-face-attributes' -- The face attributes
-;;   of a face, after expanding all inherited faces.
+;; The following concepts are used when describing the library
+;; functions below.
+;;
+;; - *Primitive face attributes* -- How something looks to the user,
+;;   expressed as a property list of face attributes, after things
+;;   like *inherited faces*, *active themes*, and *redirects* have
+;;   been taken into account.  This can, for example, include the
+;;   foreground and the background color, if it is bold or italic etc.
+;;
+;;   Properties like `:height' could be relative (like 1.2) or
+;;   absolute (like 10).  Primitive face attributes never contain the
+;;   `:inherit' attribute.  Unspecified properties are not included.
+;;
+;; - *Face specification* -- Anything the `face' text properly
+;;   accepts, including a face name (a symbol or a string), a property
+;;   list `(KEYWORD VALUE ...)', or a mix of the above.
+;;
+;; Function for frames:
+;;
+;; The following functions can be used to query information about
+;; frames (defaulting to the current frame).
+;;
+;; - `face-explorer-face-attributes' -- The primitive face attributes
+;;   of a face in an existing frame.
 ;;
 ;; - `face-explorer-face-prop-attributes' -- The primitive face
-;;   attributes of a face specification, as used by the `face' text
-;;   property.  Effectively, this can tell how a piece of text look to
-;;   the user, expressed in terms of foreground color, background
-;;   color, underline etc.  Face remappings performed by
-;;   `face-remapping-alist' are handled.
+;;   attributes of a face specification in an existing frame..
 ;;
 ;; - `face-explorer-face-attributes-at' -- The primitive face
-;;   attributes at a specific position in a buffer.
+;;   attributes at a specific position in a buffer in an existing
+;;   frame.
 ;;
-;; Support for a fictitious display:
+;; - `face-explorer-face-attributes-for-future-frames' -- The
+;;   primitive face attributes of a face, if it was displayed in a
+;;   newly created frame.
+;;
+;; Fictitious displays:
+;;
+;; Emacs supports a variety of displays, from graphical frames to
+;; simple terminals.  Built-in functions, like `face-foreground', only
+;; provides information on how a face looks in the current display
+;; environment.  This library provides query functions for any
+;; fictitious display.  For example, it can determine how a face would
+;; look in a terminal with eight colors or in a grayscale graphical
+;; display.
 ;;
 ;; The following variables defines a fictitious display.  The
 ;; face-explorer tools use the global variants of these variables.
 ;; However, when calling the functions in the library, it's possible
 ;; to dynamically bind them using `let'.
 ;;
-;; - `face-explorer-number-of-colors' -- Number of colors.
+;; - `face-explorer-number-of-colors' -- Number of colors, or `t' for
+;;   unrestricted number of colors.
 ;;
 ;; - `face-explorer-background-mode' -- The background mode, either
 ;;   `light' or `dark'.
@@ -126,37 +141,44 @@
 ;;   either a symbol like `tty' or a list like `(graphic ns)'.
 ;;
 ;; - `face-explorer-match-supports-function' -- A function to call to
-;;   determine the features a display supports.  By default, a
+;;   determine the features that a display supports.  By default, a
 ;;   graphical display supports everything and a tty supports things
 ;;   like underline and inverse video.
 ;;
 ;; The following functions can be used to query face-related
 ;; information for fictitious displays:
 ;;
-;; - `face-explorer-face-attributes-for-fictitious-display'
-;;   -- The face attributes of a face, after expanding all inherited
-;;   faces, for a fictitious display.
+;; - `face-explorer-face-attributes-for-fictitious-display' -- The
+;;   primitive face attributes a face would have in a fictitious
+;;   display.
 ;;
 ;; - `face-explorer-face-prop-attributes-for-fictitious-display' --
-;;   The primitive face attributes of a face specification, as used by
-;;   the `face' text property, for a fictitious display.  Effectively,
-;;   this can tell how a piece of text look to the user, expressed in
-;;   terms of foreground color, background color, underline etc.
+;;   The primitive face attributes a face specification, as used by
+;;   the `face' text property, would have in a fictitious display.
 ;;
 ;; - `face-explorer-face-attributes-for-fictitious-display-at' -- The
 ;;   primitive face attributes at a specific position in a buffer, for
 ;;   a fictitious display.
+;;
+;; Usefule macros:
+;;
+;; - `face-explorer-with-fictitious-display' -- evaluate body with the
+;;   fictitious variables bound by `let'.  This allows the code in the
+;;   body to modify the variables without changing their global value.
+;;
+;; - `face-explorer-with-fictitious-display-as-frame' -- Ditto, and
+;;   set the fictitious display variables to match a frame.
 
-;; Face-related tools:
+;; Tools provided by *face-explorer*:
 ;;
 ;; This package provide a number of face-related tools.  Most of them
-;; display information about a face both in the selected frame and as
+;; display information about a face both in the selected frame and how
 ;; it would look on a fictitious display.
 ;;
-;; Key bindings:
+;; Common key bindings:
 ;;
-;; In the tool buffers, you can use the following keys to change the
-;; settings:
+;; Many tools display the result in dedicated buffers.  In the buffers,
+;; you can use the following keys to change the settings:
 ;;
 ;; - `-', `+', and `#' -- Decrease, increase, and set the number of
 ;;   colors of the fictitious display.  The increase and decrease
@@ -170,23 +192,7 @@
 ;;
 ;; - `g' -- Toggle the window system between that of the selected frame
 ;;   and a terminal.
-
-;; Face verifiers:
 ;;
-;; The `face-explorer-list-faces' and `face-explorer-describe-face'
-;; tools warn about inappropriately defined faces.  You can use the
-;; following keys to handle these warnings:
-;;
-;;    - `wd' -- Disable verifier
-;;
-;;    - `we' -- Enable verifier
-;;
-;;    - `wa' -- Enable all verifiers
-;;
-;;    - `wn' -- Disable all verifiers
-;;
-;;    - `wx' -- Describe verifier.
-
 ;; The `face-explorer-list-faces' tool:
 ;;
 ;; List all available faces.  Like `list-faces-display' but with
@@ -198,7 +204,8 @@
 ;;
 ;; - `RET' -- Open the `face-explorer-describe-face' tool for the face
 ;;   on the line of the cursor.
-
+;;
+;;
 ;; The `face-explorer-describe-face' tool:
 ;;
 ;; Display information about a face.  This includes:
@@ -215,10 +222,12 @@
 ;;
 ;; - The face specifications used to define the face, originating from
 ;;   `defface', `custom-theme-set-faces' etc.
-
+;;
+;;
 ;; The `face-explorer-describe-face-prop' tool:
 ;;
-;; Display information about a `face' text property.  This includes:
+;; Display information about a `face' text property at the point.
+;; This includes:
 ;;
 ;; - The value of the property
 ;;
@@ -229,42 +238,79 @@
 ;;
 ;; - Samples how the `face' text property would look in a number of
 ;;   typical fictitious displays.
-
+;;
+;;
 ;; The `face-explorer-list-display-features' tool:
 ;;
-;; Display a buffer contains text using specially constructed faces
-;; that will look differently depending on available display features.
-;; For example, if you run `emacsclient -nw' from a terminal, this
-;; buffer will look differently than it does in a graphical frame.
-
+;; Show which features a display supports.  Most graphical displays
+;; support all, or most, features.  However, many tty:s don't support,
+;; for example, strike-through.
+;;
+;; This is implemented by using specially constructed faces that will
+;; look differently depending on available display features.  For
+;; example, if you run `emacsclient -nw' from a terminal, this buffer
+;; will look differently than it does in a graphical frame.
+;;
+;;
 ;; The `face-explorer-list-face-prop-examples' tool:
 ;;
-;; List sample text with face text properties in various variants.
+;; List sample text with face text properties in various forms of
+;; complexity.  This includes mixing faces with primive attribtues,
+;; explicit inheritence etc.
 ;;
-;; This is useful for two reasons:
+;; This can be used to:
 ;;
-;; - It can be used to investigate how Emacs, rally, displays various
+;; - Investigate how Emacs, really, displays various combinations of
 ;;   faces and text properties.
 ;;
-;; - It can be used to test packages that convert text with text
-;;   properties to various other format, like PostScript, HTML, ANSI,
-;;   LaTeX etc.
-
+;; - Test packages that convert text with text properties to various
+;;   other format, like PostScript, HTML, ANSI, LaTeX etc.
+;;
+;; - Self-test of face-explorer itself.  When working properly, all
+;;   four columns with sample text should display the same value.
+;;
+;; The displayed buffer contains a number of columns:
+;;
+;; - Name -- A name of the example.
+;;
+;; - Native -- A sample text with the face property applied.
+;;
+;; - Reference -- A sample text with primitive attributes
+;;   demonstrating how example should look.
+;;
+;; - CurrentFrame -- A sample test with the attributes deduced by this
+;;   library.
+;;
+;; - Fictitious -- Ditto, but for the current fictitious
+;;   display.  (This can differ from the above.)
+;;
+;; - Spec -- The face attribute that is used on the line (a Lisp data
+;;   structure).
+;;
+;; Each example is displayed twice, the first with the attributes
+;; directly and the second with the attributes placed in a list.
+;;
+;;
 ;; The `face-explorer-list-overlay-examples' tool:
 ;;
-;; List sample text with overlays in various variants.
-
+;; Show a buffer with a number of examples of overlays, some are mixed
+;; with `face' text properties.  Any package that convert a buffer to
+;; another format (like HTML, ANSI, or LaTeX) could use this buffer to
+;; ensure that everything work as intended.
+;;
+;;
 ;; The `face-explorer-tooltip-mode' tool:
 ;;
-;; A minor mode that shows information about text
-;; properties and overlays in a tooltip.
+;; A minor mode that shows information about text properties and
+;; overlays in a tooltip.
 ;;
 ;; This is enabled in all buffers displayed by the tools in this
 ;; module.
 ;;
 ;; `face-explorer-tooltip-global-mode' can be used to enable this mode
 ;; for all buffers.
-
+;;
+;;
 ;; The `face-explorer-simulate-display-mode' tool:
 ;;
 ;; A minor mode used to show how the current buffer would look in a
@@ -282,19 +328,37 @@
 ;; `face-explorer-simulate-display-global-mode' can be used to enable
 ;; this mode for all buffers.
 
-;; Vocabulary:
+;; Face verifiers:
 ;;
-;; Primitive face attributes:
+;; The `face-explorer-list-faces' and `face-explorer-describe-face'
+;; tools warn about inappropriately defined faces.  You can use the
+;; following keys to handle these warnings:
 ;;
-;; Normally, a face or face specification can be quite complex, for
-;; example a face can inherit from other faces and a face
-;; specification can contain several faces.  "Primitive face
-;; attributes" corresponds to how the face or face specification will
-;; look to the user, the foreground and background color it has,
-;; whether it is bold or italic etc.  Unspecified properties are not
-;; included.  Properties like :height could be relative (like 1.2) or
-;; absolute (like 10).  Primitive face attributes never contain the
-;; `:inherit' attribute.
+;;    - `wd' -- Disable verifier
+;;
+;;    - `we' -- Enable verifier
+;;
+;;    - `wa' -- Enable all verifiers
+;;
+;;    - `wn' -- Disable all verifiers
+;;
+;;    - `wx' -- Describe verifier.
+;;
+
+;; Implementing a converter using `face-explorer':
+;;
+;; The `face-explorer' can be used to implement converters that take a
+;; syntax-highlighted buffer as input and can emit any kind of
+;; structured output.
+;;
+;; The converter can iterate over the buffer using
+;; `face-explorer-next-face-property-change' and retreive face
+;; information using `face-explorer-face-attributes-at' or
+;; `face-explorer-face-attributes-for-fictitious-display-at'.
+;;
+;; The file [face-explorer-example.el](face-explorer-example.el)
+;; contains a simple example that visualizes the highlighting of a
+;; buffer.
 
 ;; Technical background:
 ;;
@@ -568,16 +632,25 @@ Like `plist-put', but does not destructively change PLIST."
   (while plist2
     (let ((key (pop plist2))
           (value (pop plist2)))
-      ;; Height:s are accumulative.
-      (if (and (eq key :height)
-               (floatp value)
-               (floatp (plist-get plist1 :height)))
-          (setq plist1
-                (face-explorer-plist-set
-                 plist1 :height (* value
-                                   (plist-get plist1 :height))))
-        (unless (plist-member plist1 key)
-          (setq plist1 (cons key (cons value plist1)))))))
+      (cond ((and (eq key :height)
+                  (floatp value)
+                  (floatp (plist-get plist1 :height)))
+             ;; Height:s are accumulative.
+             (setq plist1
+                   (face-explorer-plist-set
+                    plist1 :height (* value
+                                      (plist-get plist1 :height)))))
+            ((memq key '(:box
+                         :overline
+                         :underline
+                         :strike-through
+                         :inverse-video))
+             ;; Not present.
+             (unless (plist-member plist1 key)
+               (setq plist1 (face-explorer-plist-set plist1 key value))))
+            ((null (plist-get plist1 key))
+             ;; Not present or nil.
+             (setq plist1 (face-explorer-plist-set plist1 key value))))))
   plist1)
 
 
@@ -614,7 +687,7 @@ the same as the original PLIST."
       (face-explorer-keep-well-formed-attributes (cdr-safe (cdr plist))))))
 
 
-;; C.f. `custom-fix-face-spec'.
+;; See `custom-fix-face-spec'.
 (defun face-explorer-fix-face-attributes (plist)
   "Convert deprecated face attributes in PLIST to modern variants."
   (if (null plist)
@@ -851,7 +924,16 @@ return (FLAG . PLIST) as described above."
   ;; does not matter.  (However, in `face' text properties, it does
   ;; matter.)
   (let ((xplist '(nil . ()))
-        (inherit (plist-get plist :inherit)))
+        (inherit (plist-get plist :inherit))
+        (attributes-to-reset '()))
+    ;; The special attribute value `reset' means that the value should
+    ;; not be inherited.
+    (let ((rest plist))
+      (while rest
+        (let ((keyword (pop rest))
+              (value (pop rest)))
+          (if (eq value 'reset)
+              (push keyword attributes-to-reset)))))
     ;; Get all inherited properties.
     (when inherit
       (unless (consp inherit)
@@ -876,9 +958,16 @@ return (FLAG . PLIST) as described above."
                             use-remapping
                             extra-arguments))))))))
     ;; Override with properties explicitly defined.
-    (face-explorer-join-face-xattributes
-     (cons nil (face-explorer-plist-delete :inherit plist))
-     xplist)))
+    (setq xplist (face-explorer-join-face-xattributes
+                  (cons nil (face-explorer-plist-delete :inherit plist))
+                  xplist))
+    ;; Delete attributes that are reset.
+    (let ((xcar (car xplist))
+          (xcdr (cdr xplist)))
+      (dolist (keyword attributes-to-reset)
+        (setq xcdr (face-explorer-plist-delete keyword xcdr)))
+      (cons xcar xcdr))))
+
 
 
 (defun face-explorer-maybe-set-inherit-from-default-flag (xplist is-default)
@@ -941,11 +1030,14 @@ Search up to LIMIT (defaults to `point-max').
 If POS is nil and the first character has a `face' property,
 return `point-min'.
 
-If last character contains a face property, return `point-max'."
+When there are no changes of the `face' property between POS and the end
+of the buffer, `point-max' is returned.
+
+Return nil if POS is at LIMIT or beyond."
   (unless limit
     (setq limit (point-max)))
-  (if (equal pos limit)
-      ;; Last search returned `limit'. There is no more to search for.
+  (if (>= (or pos (point-min)) limit)
+      ;; At the end.
       nil
     (if (and (null pos)
              (get-text-property (point-min) 'face))
@@ -955,7 +1047,7 @@ If last character contains a face property, return `point-max'."
       (unless pos
         ;; Start from the beginning.
         (setq pos (point-min)))
-      (next-char-property-change pos limit))))
+      (next-single-char-property-change pos 'face (current-buffer) limit))))
 
 
 (defun face-explorer-overlays-at (pos)
@@ -964,6 +1056,7 @@ If last character contains a face property, return `point-max'."
 In newer Emacs versions, the list is sorted by decreasing priority."
   (condition-case nil
       (with-no-warnings
+        ;; The ":sorted" parameter was introduced in Emacs 24.4.
         (overlays-at pos :sorted))
     (error
      ;; Note: `reverse' is needed to preserve the original order for
@@ -972,27 +1065,27 @@ In newer Emacs versions, the list is sorted by decreasing priority."
      ;; modify the original list returned by `overlays-at'.
      (let ((seq (reverse (overlays-at pos))))
        (setq seq
-	     (sort seq (lambda (a b)
-			 (let ((a-prio (or (overlay-get a 'priority)
-					   0))
-			       (b-prio (or (overlay-get b 'priority)
-					   0)))
-			   ;; Priorities are typically numbers, but some
-			   ;; internal overlays use other, undocumented,
-			   ;; values.
-			   (if (not (equal a-prio b-prio))
-			       (and (numberp a-prio)
-				    (numberp b-prio)
-				    (< a-prio b-prio))
-			     (let ((a-start (overlay-start a))
-				   (b-start (overlay-start b)))
-			       (if (not (eq a-start b-start))
-				   (< a-start b-start)
-				 (let ((a-end (overlay-end a))
-				       (b-end (overlay-end b)))
-				   (if (not (eq a-end b-end))
-				       (> a-end b-end)
-				     nil)))))))))
+             (sort seq (lambda (a b)
+                         (let ((a-prio (or (overlay-get a 'priority)
+                                           0))
+                               (b-prio (or (overlay-get b 'priority)
+                                           0)))
+                           ;; Priorities are typically numbers, but some
+                           ;; internal overlays use other, undocumented,
+                           ;; values.
+                           (if (not (equal a-prio b-prio))
+                               (and (numberp a-prio)
+                                    (numberp b-prio)
+                                    (< a-prio b-prio))
+                             (let ((a-start (overlay-start a))
+                                   (b-start (overlay-start b)))
+                               (if (not (eq a-start b-start))
+                                   (< a-start b-start)
+                                 (let ((a-end (overlay-end a))
+                                       (b-end (overlay-end b)))
+                                   (if (not (eq a-end b-end))
+                                       (> a-end b-end)
+                                     nil)))))))))
        seq))))
 
 
@@ -1004,7 +1097,7 @@ well from overlays."
   (unless pos
     (setq pos (point)))
   (let ((res (get-text-property pos 'face)))
-    (dolist (overlay (face-explorer-overlays-at pos))
+    (dolist (overlay (reverse (face-explorer-overlays-at pos)))
       (let ((overlay-text-prop (overlay-get overlay 'face)))
         (when overlay-text-prop
           (if res
@@ -1017,6 +1110,9 @@ well from overlays."
                 ;; structure, so it's hard to remove duplicates here.
                 ;; However, `face-explorer-parse-face-prop' handles
                 ;; them as they are.
+                ;;
+                ;; Entries towards the end of a property list takes
+                ;; precedence.
                 (setq res (append res overlay-text-prop)))
             (setq res overlay-text-prop)))))
     res))
@@ -1127,20 +1223,14 @@ Face information for the selected frame is used."
 
 
 (defun face-explorer-display-number-of-colors (&optional display)
-  "Number of colors supported by DISPLAY.
-
-In batch mode, try to estimate number of colors by inspecting the
-TERM environment variable.
+  "Number of colors supported by DISPLAY, or t for full RGB support.
 
 DISPLAY can be a display name or a frame.  If DISPLAY is omitted
 or nil, it defaults to the selected frame's display."
   (let ((colors (display-color-cells display)))
     (if (eq colors 0)
-        (let ((term (getenv "TERM")))
-          (if (and term
-                   (string-match "-256color$" term))
-              256
-            8))
+        ;; No information, assume unlimited number of colors.
+        t
       colors)))
 
 
@@ -1996,7 +2086,7 @@ the element is non-nil, the column is right formatted."
         ;; Clear end of line whitespace.
         (while (and (eq (char-before) ?\s)
                     (not (get-text-property (- (point) 1) 'face)))
-          (backward-delete-char 1))
+          (delete-char -1))
         ;; End of line.
         (insert "\n")))))
 
@@ -2476,7 +2566,7 @@ that changing the major mode doesn't leave stray overlays."
 
 
 ;;;###autoload
-(define-global-minor-mode face-explorer-tooltip-global-mode
+(define-globalized-minor-mode face-explorer-tooltip-global-mode
   face-explorer-tooltip-mode
   (lambda ()
     (face-explorer-tooltip-mode 1))
@@ -2788,8 +2878,22 @@ List of all faces, with samples in current and fictitious displays.\n\n")
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-list-faces-refresh))
+
+
+(defun face-explorer-list-faces-next-face ()
+  "Describe the next face in the face-explorer face list."
+  (interactive)
+  (forward-line)
+  (face-explorer-describe-face-at-point))
+
+
+(defun face-explorer-list-faces-previous-face ()
+  "Describe the previous face in the face-explorer face list."
+  (interactive)
+  (forward-line -1)
+  (face-explorer-describe-face-at-point))
 
 
 (defvar face-explorer-list-faces-mode-map
@@ -2797,6 +2901,8 @@ function, c.f. `revert-buffer-function'."
     (set-keymap-parent map face-explorer-common-mode-map)
     (define-key map (kbd "RET") #'face-explorer-describe-face-at-point)
     (define-key map (kbd "TAB") #'face-explorer-animate)
+    (define-key map (kbd "n")   #'face-explorer-list-faces-next-face)
+    (define-key map (kbd "p")   #'face-explorer-list-faces-previous-face)
     (face-explorer-define-verifier-keys map)
     map)
   "Keymap for `face-explorer-list-faces-mode'.")
@@ -2982,7 +3088,7 @@ INDENTATION, when specified, is a string inserted before each line."
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-describe-face-refresh))
 
 
@@ -3058,7 +3164,7 @@ text property at the point."
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-describe-face-prop-refresh))
 
 
@@ -3262,7 +3368,7 @@ buffer will look differently than it does in a graphical frame.\n\n")
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-list-display-features-refresh))
 
 
@@ -3756,6 +3862,24 @@ function, c.f. `revert-buffer-function'."
       face-explorer-example-green-foreground)
      (:foreground "red" :background "blue"))
 
+
+    ;; --------------------
+    ;; Check `reset' against inherited face.
+    ;;
+
+    ("reset-face1"
+     face-explorer-example-inherit-reset
+     (:background "blue"))
+
+    ;; `reset' in a face property doesn't seems to have an affect.
+    ("reset-inh1"
+     (:inherit face-explorer-example-red-blue :foreground reset)
+     (:background "blue" :foreground "red"))
+
+    ("reset-inh2"
+     (:foreground reset :inherit face-explorer-example-red-blue)
+     (:background "blue" :foreground "red"))
+
     ;; --------------------
     ;; Distant foreground.
     ;;
@@ -3801,7 +3925,7 @@ function, c.f. `revert-buffer-function'."
     ("weight-normal"
      (face-explorer-example-weight-normal
       face-explorer-example-weight-bold)
-     ())
+     (:weight normal))
 
     ("slant-italic"
      (face-explorer-example-slant-italic)
@@ -3810,7 +3934,7 @@ function, c.f. `revert-buffer-function'."
     ("slant-normal"
      (face-explorer-example-slant-normal
       face-explorer-example-slant-italic)
-     ())
+     (:slant normal))
 
     ;; ----------
     ;; "nil" resets.
@@ -3821,7 +3945,7 @@ function, c.f. `revert-buffer-function'."
     ("overline-nil"
      (face-explorer-example-overline-nil
       face-explorer-example-overline)
-     ())
+     (:overline nil))
 
     ("underline"
      (face-explorer-example-underline)
@@ -3830,7 +3954,7 @@ function, c.f. `revert-buffer-function'."
     ("underline-nil"
      (face-explorer-example-underline-nil
       face-explorer-example-underline)
-     ())
+     (:underline nil))
 
     ("box"
      (face-explorer-example-box)
@@ -3839,7 +3963,7 @@ function, c.f. `revert-buffer-function'."
     ("box-nil"
      (face-explorer-example-box-nil
       face-explorer-example-box)
-     ())
+     (:box nil))
 
     ("strike-through"
      (face-explorer-example-strike-through)
@@ -3848,7 +3972,7 @@ function, c.f. `revert-buffer-function'."
     ("strike-through-nil"
      (face-explorer-example-strike-through-nil
       face-explorer-example-strike-through)
-     ())
+     (:strike-through nil))
 
     ("inverse-video"
      (face-explorer-example-inverse-video)
@@ -3857,7 +3981,7 @@ function, c.f. `revert-buffer-function'."
     ("inverse-video-nil"
      (face-explorer-example-inverse-video-nil
       face-explorer-example-inverse-video)
-     ())
+     (:inverse-video nil))
 
     ;; ----------
     ;; "nil" DOES NOT reset!
@@ -3865,30 +3989,29 @@ function, c.f. `revert-buffer-function'."
      (face-explorer-example-red-foreground)
      (:foreground "red"))
 
-    ;; Having "nil" as background or foreground is not
-    ;; legal. Unfortunately, face-explorer doesn't handle it as Emacs
-    ;; does. TODO: Fix this.
+    ;; Although, having "nil" as background or foreground is not
+    ;; legal, but check that anyway.
 
-    ;; ("foreground-nil"
-    ;;  (face-explorer-example-foreground-nil
-    ;;   face-explorer-example-red-foreground)
-    ;;  (:foreground "red"))
+    ("foreground-nil"
+     (face-explorer-example-foreground-nil
+      face-explorer-example-red-foreground)
+     (:foreground "red"))
 
     ("background"
      (face-explorer-example-blue-background)
      (:background "blue"))
 
-    ;; ("background-nil"
-    ;;  (face-explorer-example-background-nil
-    ;;   face-explorer-example-blue-background)
-    ;;  (:background "blue")
+    ("background-nil"
+     (face-explorer-example-background-nil
+      face-explorer-example-blue-background)
+     (:background "blue")))
 
-    )
-  "List of example of `face' text properties.
+  "List of real-world examples of the `face' text property.
 
 Each element of the list is on the form (NAME PROP REFERENCE),
-where NAME is the name of the entry, PROP is a text property, and
-REFERENCE is the corresponding as primitive text attributes.")
+where NAME is the name of the entry, PROP is a `face' text
+property as it could occur in the wild, and REFERENCE is the
+corresponding primitive `face' text attributes.")
 
 
 (defun face-explorer-list-face-prop-examples--define-faces ()
@@ -4019,6 +4142,25 @@ This is remapped by `face-explorer-list-face-prop-examples' to
 ;;  '((t :stipple nil))
 ;;  "Face with nil stipple.")
 
+  ;; --------------------
+  ;; Font using `reset'.
+  ;;
+  ;; When an attribute has the value `reset', the actual value will be
+  ;; that of the `default' face.
+
+  (defface face-explorer-example-foreground-reset
+    '((t :foreground reset))
+    "Face with `reset' foreground.")
+
+  ;; This inherit the foreground color from the parent.
+  (defface face-explorer-example-inherit-unspecified
+    '((t :inherit face-explorer-example-red-blue :foreground unspecified))
+    "Face that `unspecified' foreground defined by parent.")
+
+  ;; This does not inherit the foreground color from the parent.
+  (defface face-explorer-example-inherit-reset
+    '((t :inherit face-explorer-example-red-blue :foreground reset))
+    "Face that `reset' foreground defined by parent.")
 
   ;; --------------------
   ;; Obsolete face alias.
@@ -4114,7 +4256,7 @@ containing the entry."
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-list-face-prop-examples-refresh))
 
 
@@ -4545,7 +4687,7 @@ the same.\n\n")
 
 This function takes, but ignores, two arguments IGNORE-AUTO and
 NOCONFIRM.  This makes it suitable to act as a revert buffer
-function, c.f. `revert-buffer-function'."
+function, see also `revert-buffer-function'."
   (face-explorer-list-overlay-examples-refresh))
 
 
@@ -4598,7 +4740,7 @@ The following keys are used:
 
 
 ;;;###autoload
-(define-global-minor-mode face-explorer-simulate-display-global-mode
+(define-globalized-minor-mode face-explorer-simulate-display-global-mode
   face-explorer-simulate-display-mode
   face-explorer-maybe-enable-simulate-display-mode
   :group 'face-explorer)

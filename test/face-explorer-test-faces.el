@@ -267,7 +267,7 @@ This is used to test remapping.")
 
 
 ;; --------------------
-;; A face with both a theme specifier and a future frame attribtue.
+;; A face with both a theme specifier and a future frame attribute.
 ;;
 ;; End result: The future frame attribute takes precedence, in new
 ;; frames.
@@ -463,8 +463,32 @@ This is used to test remapping.")
     face-explorer-feature-bold-no
     face-explorer-feature-bold-yes
     ;; Designed to different in current and future frames.
-    face-explorer-test-faces-both-theme-and-future-frame))
+    face-explorer-test-faces-both-theme-and-future-frame
+    ;; Incorrect inherit, parent specified with
+    ;; quote. `face-attribute' returns an incorrect value, even if
+    ;; Emacs can display the face. (Will be fixed in Emacs 31.)
+    shell-highlight-undef-alias-face
+    shell-highlight-undef-defined-face
+    shell-highlight-undef-undefined-face
+    ))
 
+;; This is needed since
+;; `face-explorer-face-xattributes-for-fictitious-display' returns
+;; properties that are ignored by Emacs.
+;;
+;; (Having nil as a value to :foreground and :background is illegal,
+;; but it's tested anyway.)
+(defun face-explorer-test-remove-ignored-attributes (plist)
+  "Remove attributes that have no meaning when nil"
+  (if (null plist)
+      '()
+    (if (and (memq (nth 0 plist) '(:foreground :background))
+             (eq (nth 1 plist) nil))
+        (face-explorer-test-remove-ignored-attributes (cdr (cdr plist)))
+      (cons (nth 0 plist)
+            (cons (nth 1 plist)
+                  (face-explorer-test-remove-ignored-attributes
+                   (cdr (cdr plist))))))))
 
 ;; TODO: Do something better than ignoring faces that inherit from
 ;; `default'.
@@ -479,6 +503,7 @@ This is used to test remapping.")
   (unless noninteractive
     (face-explorer-test-faces-define-faces-partially-overlapping)
     (face-explorer-test-faces-define-all-kind-of-faces)
+    (face-explorer-list-face-prop-examples--define-faces)
     (face-explorer-with-fictitious-display-as-frame (selected-frame)
       (let ((attributes (mapcar #'car custom-face-attributes)))
         (dolist (face (face-list))
@@ -498,7 +523,7 @@ This is used to test remapping.")
                   (should
                    (face-explorer-test-faces-plist-equal
                     plist
-                    (cdr pair)
+                    (face-explorer-test-remove-ignored-attributes (cdr pair))
                     ;; Not used, only supplied to make it easier to
                     ;; determine which face failed.
                     face)))))))))))
@@ -659,12 +684,25 @@ This is used to test remapping.")
 
 
 (ert-deftest face-explorer-test-faces-find-duplicates ()
-  "Ensure there are no duplicated in `face-explorer-test-faces-spec-list'."
+  "Ensure there are no duplicates in `face-explorer-example-each-face-prop'.
+
+The macro `face-explorer-example-each-face-prop' iterates over
+`face-explorer-example-each-face-prop' and calls the body with
+variants. It is natural that some of those variants are the same,
+hence the `count' in the key."
   (let ((seen-list '()))
     (face-explorer-example-each-face-prop tripple count
-      (let ((key (nth 1 tripple)))
+      (let ((key (list (nth 1 tripple) count)))
         (should-not (member key seen-list))
         (push key seen-list)))))
+
+
+(ert-deftest face-explorer-test-faces-find-duplicates-2 ()
+  "Ensure there are no duplicates in `face-explorer-face-prop-example-list'."
+  (let ((seen-list '()))
+    (dolist (prop face-explorer-face-prop-example-list)
+      (should-not (member prop seen-list))
+      (push prop seen-list))))
 
 
 ;; -------------------------------------------------------------------
